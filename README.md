@@ -94,7 +94,7 @@ Reproducir el laboratorio de IPSec Policy-Based usando **IKEv2** en lugar de ISA
 
 ## 🔧 Configuración
 
-Ver archivo: `Configuración para VPN IPSec Policy-Based IKEv2.txt`
+Ver archivo: `files/config.txt`
 
 ---
 
@@ -114,7 +114,7 @@ Se espera:
 ## 📸 Capturas de Pantalla
 
 ```
-evidencias/
+images/
 ├── 01_topologia.png
 ├── 02_show_crypto_ikev2_sa.png
 ├── 03_show_crypto_ipsec_sa.png

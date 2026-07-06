@@ -1,0 +1,333 @@
+################################################################################
+#  CONFIGURACIÓN — VPN IPSEC POLICY-BASED IKEv2
+################################################################################
+
+
+──────────────────────────────────────────
+▶ DISPOSITIVO: ISP-CLARO
+──────────────────────────────────────────
+enable
+conf t
+no ip domain-lookup
+hostname ISP-CLARO
+banner motd # LUIGGY ENCARNACION 2025-0663 | EL ACCESO NO AUTORIZADO ESTA RESTRINGIDO #
+username Admin privilege 15 secret cisco
+service password-encryption
+
+ip domain-name redlocal.com
+crypto key generate rsa general-keys modulus 1024
+ip ssh version 2
+ip ssh time-out 60
+ip ssh authentication-retries 3
+
+line console 0
+ exec-timeout 5 0
+ logging synchronous
+
+line vty 0 4
+ login local
+ transport input ssh
+ exec-timeout 5 0
+ logging synchronous
+
+exit
+
+! Interfaz hacia R-Este
+interface GigabitEthernet0/1
+ ip address 25.6.63.2 255.255.255.252
+ no shutdown
+
+! Interfaz hacia R-Oeste
+interface GigabitEthernet0/2
+ ip address 25.6.63.5 255.255.255.252
+ no shutdown
+
+exit
+
+! Interfaz loopback para pruebas
+int lo0
+ ip address 20.20.20.20 255.255.255.255
+exit
+
+! Rutas estáticas a las LANs
+ip route 10.6.63.0 255.255.255.0 25.6.63.1
+ip route 172.16.63.0 255.255.255.0 25.6.63.6
+
+end
+wr
+
+
+──────────────────────────────────────────
+▶ DISPOSITIVO: R-ESTE
+──────────────────────────────────────────
+enable
+conf t
+no ip domain-lookup
+hostname R-ESTE
+banner motd # LUIGGY ENCARNACION 2025-0663 | EL ACCESO NO AUTORIZADO ESTA RESTRINGIDO #
+username Admin privilege 15 secret cisco
+service password-encryption
+
+ip domain-name redlocal.com
+crypto key generate rsa general-keys modulus 1024
+ip ssh version 2
+ip ssh time-out 60
+ip ssh authentication-retries 3
+
+line console 0
+ exec-timeout 5 0
+ logging synchronous
+
+line vty 0 4
+ login local
+ transport input ssh
+ exec-timeout 5 0
+ logging synchronous
+
+exit
+
+! VPN IPSec Policy-Based IKEv2
+crypto ikev2 proposal IKEV2-PROP
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+
+crypto ikev2 policy IKEV2-POLICY
+ proposal IKEV2-PROP
+
+crypto ikev2 keyring VPN-KEYRING
+ peer R-OESTE
+  address 25.6.63.6
+  pre-shared-key Luiggy20250663!
+
+crypto ikev2 profile VPN-IKE-PROFILE
+ match identity remote address 25.6.63.6 255.255.255.255
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local VPN-KEYRING
+
+crypto ipsec transform-set VPN-SET esp-aes 256 esp-sha-hmac
+ mode tunnel
+exit
+
+ip access-list extended VPN_to_SITEB
+ permit ip 10.6.63.0 0.0.0.255 172.16.63.0 0.0.0.255
+exit
+
+crypto map VPN-MAP 10 ipsec-isakmp
+ set peer 25.6.63.6
+ set ikev2-profile VPN-IKE-PROFILE
+ set transform-set VPN-SET
+ match address VPN_to_SITEB
+exit
+
+! WAN hacia ISP
+interface GigabitEthernet0/1
+ ip address 25.6.63.1 255.255.255.252
+ no shutdown
+ crypto map VPN-MAP
+
+! LAN
+interface GigabitEthernet0/0
+ ip address 10.6.63.1 255.255.255.0
+ no shutdown
+ duplex full
+exit
+
+! DHCP
+ip dhcp excluded-address 10.6.63.1 10.6.63.9
+
+ip dhcp pool REDLOCAL
+ network 10.6.63.0 255.255.255.0
+ default-router 10.6.63.1
+ dns-server 8.8.8.8 1.1.1.1
+ domain-name redlocal.com
+
+! Ruta default hacia ISP
+ip route 0.0.0.0 0.0.0.0 25.6.63.2
+
+end
+wr
+
+
+──────────────────────────────────────────
+▶ DISPOSITIVO: R-OESTE
+──────────────────────────────────────────
+enable
+conf t
+no ip domain-lookup
+hostname R-OESTE
+banner motd # LUIGGY ENCARNACION 2025-0663 | EL ACCESO NO AUTORIZADO ESTA RESTRINGIDO #
+username Admin privilege 15 secret cisco
+service password-encryption
+
+ip domain-name redlocal.com
+crypto key generate rsa general-keys modulus 1024
+ip ssh version 2
+ip ssh time-out 60
+ip ssh authentication-retries 3
+
+line console 0
+ exec-timeout 5 0
+ logging synchronous
+line vty 0 4
+ login local
+ transport input ssh
+ exec-timeout 5 0
+ logging synchronous
+
+exit
+
+! VPN IPSec Policy-Based IKEv2
+crypto ikev2 proposal IKEV2-PROP
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+
+crypto ikev2 policy IKEV2-POLICY
+ proposal IKEV2-PROP
+
+crypto ikev2 keyring VPN-KEYRING
+ peer R-ESTE
+  address 25.6.63.1
+  pre-shared-key Luiggy20250663!
+
+crypto ikev2 profile VPN-IKE-PROFILE
+ match identity remote address 25.6.63.1 255.255.255.255
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local VPN-KEYRING
+
+crypto ipsec transform-set VPN-SET esp-aes 256 esp-sha-hmac
+ mode tunnel
+exit
+
+ip access-list extended VPN_to_SITEA
+ permit ip 172.16.63.0 0.0.0.255 10.6.63.0 0.0.0.255
+exit
+
+crypto map VPN-MAP 10 ipsec-isakmp
+ set peer 25.6.63.1
+ set ikev2-profile VPN-IKE-PROFILE
+ set transform-set VPN-SET
+ match address VPN_to_SITEA
+
+! WAN hacia ISP
+interface GigabitEthernet0/2
+ ip address 25.6.63.6 255.255.255.252
+ no shutdown
+ crypto map VPN-MAP
+
+! LAN
+interface GigabitEthernet0/0
+ ip address 172.16.63.1 255.255.255.0
+ no shutdown
+ duplex full
+exit
+
+! DHCP
+ip dhcp excluded-address 172.16.63.1 172.16.63.9
+
+ip dhcp pool REDLOCAL
+ network 172.16.63.0 255.255.255.0
+ default-router 172.16.63.1
+ dns-server 8.8.8.8 1.1.1.1
+ domain-name redlocal.com
+
+! Ruta default hacia ISP
+ip route 0.0.0.0 0.0.0.0 25.6.63.5
+
+end
+wr
+
+
+──────────────────────────────────────────
+▶ DISPOSITIVO: SW-1
+──────────────────────────────────────────
+en
+conf t
+no ip domain-lookup
+hostname SW-1
+banner motd # LUIGGY ENCARNACION 2025-0663 | EL ACCESO NO AUTORIZADO ESTA RESTRINGIDO#
+username Admin privilege 15 secret cisco
+service password-encryption
+
+ip domain-name redlocal.com
+crypto key generate rsa general-keys modulus 1024
+ip ssh version 2
+ip ssh time-out 60
+ip ssh authentication-retries 3
+
+line console 0
+ exec-timeout 5 0
+ logging synchronous
+line vty 0 4
+ login local
+ exec-timeout 5 0
+ logging synchronous
+ transport input ssh
+exit
+
+interface vlan1
+ ip address 10.6.63.2 255.255.255.0
+ no shutdown
+
+ip default-gateway 10.6.63.1
+
+int gig0/0
+ no negotiation auto
+ duplex full
+
+end
+wr
+
+
+──────────────────────────────────────────
+▶ DISPOSITIVO: SW-2
+──────────────────────────────────────────
+en
+conf t
+no ip domain-lookup
+hostname SW-2
+banner motd # LUIGGY ENCARNACION 2025-0663 | EL ACCESO NO AUTORIZADO ESTA RESTRINGIDO#
+username Admin privilege 15 secret cisco
+service password-encryption
+
+ip domain-name redlocal.com
+crypto key generate rsa general-keys modulus 1024
+ip ssh version 2
+ip ssh time-out 60
+ip ssh authentication-retries 3
+
+line console 0
+ exec-timeout 5 0
+ logging synchronous
+line vty 0 4
+ login local
+ exec-timeout 5 0
+ logging synchronous
+ transport input ssh
+exit
+
+interface vlan1
+ ip address 172.16.63.2 255.255.255.0
+ no shutdown
+ip default-gateway 172.16.63.1
+
+int gig0/0
+ no negotiation auto
+ duplex full
+
+end
+wr
+
+
+################################################################################
+#  COMPROBACIÓN — VPN IPSEC POLICY-BASED IKEv2
+################################################################################
+
+! Verificar que el túnel se levantó
+show crypto ikev2 sa
+
+! Verificar los contadores IPSec
+show crypto ipsec sa
